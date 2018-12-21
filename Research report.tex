@@ -1,0 +1,337 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\title{Demand Forecast Early Research Project}
+\usepackage{grffile}
+\usepackage{graphicx}
+\usepackage[toc,page]{appendix}
+\usepackage{listings} 
+\usepackage{float}
+\usepackage{lipsum}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\author{Pletnev Alexander}
+\date{December 2018}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\section{Executive Summary}
+In this research project we investigate the novel method of predicting the required quantity of item using additional variable: future flag. We apply 8 state-of-the-art methods (Adaboost; Kernel Regression; Lasso; Neural Network; Poisson Regression; Random Forest Regression; Ridge; SVR), 3 types of transformation (no transformation, min-max scaling, log transformation) and 2 types of fitting (all items and item by item). 
+
+We measure the resulting accuracy of prediction using SMAPE and then generate the feature importance for given methods.The tests were run on 2 given data sets.
+
+We have found out that Kernel Regression, Random Forest (one by one fitting, log transformation) and Neural Network (all items fitting, log transformation) perform better among 8 applied methods. 
+\section{Introduction}
+Demand planners in the industry use commonly tools such as Microsoft Excel to forecast. Although Excel has many strengths and is a flexible tool, it is not well-suited whenever dealing with large amounts of time series. Demand planners struggle reviewing and manually adjusting those forecasts. As a result, they rely on aggregate level adjustments. In many cases, the aggregation is prone to mistakes and poorly reflects the underlying statistical process. Data Science can mitigate this process and make the prediction more precise. 
+
+Usually, the demand forecasting setting is to estimate q(t,i) - the needed amount of a particular item i by the end of month t. For many supply chain problems, the definition is extended to estimate q(t,i,f) - the total quantity to be delivered by the end of month t through orders made f months in advance
+\section{Methodology}
+\subsection{Experimental/sampling design}
+The study was performed on the data from commercial partner of the university. Several data sets were analyzed, which are labeled by "stage 1" and "stage 3". 
+The incoming data sets had following columns: 
+\begin{itemize}
+\item rpd - represents the demand date of each item. Currently we aggregate the daily demand into monthly demand. In stage 1 it ranges from 1 to 45, in stage 3 - from 108 to 151. 
+\item item - represents the index of the items.  There are 857 items in stage 1 and 836 items in stage 3. 
+\item quantity - the actual quantity of required item in particular month
+\item future flag - represents the observed demand by the end of (rpd - future flag) month. 
+\end{itemize}
+\subsection{Data analysis}
+The following 8 methods were chosen to predict future value of the data:  Adaboost; Kernel Regression; Lasso; Neural Network; Poisson Regression; Random Forest Regression; Ridge; SVR.
+
+The prediction works as follows: firstly, we fit the incoming $x$ months. Then we predict the following $x+1$ month and compare it to the actual value. Afterwards we increase the x by 1 and iterate until it reaches $45$.
+
+To determine the starting period from which we need to predict he data, the following plot was generated. Please see Figure \ref{fig:onee} to see an example of generated plot
+
+\begin{figure}[h]
+\includegraphics[width=12cm]{23.JPG}
+\centering
+\caption{Example of predicting the future demand with future flag = 0}
+\label{fig:onee}
+\end{figure}
+As we can notice, at the beginning of the period, the difference between actual value and prediction is quite big. It is gradually reduced when we increase the predicting month, thus increasing the amount of fitting data. 
+It was determined, that we start to predict the data starting from month 34.
+
+\subsection{Measurement}
+We choose Symmetric Mean Absolute Percentage Error (SMAPE) to evaluate the result.
+Let $y_{it}$ and $\hat{y_{it}}$ be the actual and predicted quantity of item i during time window t. The SMAPE is defined as:
+\begin{figure}[H]
+\includegraphics[width=10cm]{24.JPG}
+\centering
+\end{figure}
+
+\section{Results}
+Let's analyze the key results that has been accomplished:
+\begin{enumerate}  
+\item Provided the necessary functioning code to use diagonal feeding to train any method implementing the scikit-learning api. 
+
+Please see Appendix ~\ref{appendix:one} for the implementation of the functioning code.
+
+\begin{lstlisting}[language =Python, breaklines=True]  
+df = pd.read_csv("demand_out_encoded_stage_3.csv", header=0, index_col=None)
+exp_X,exp_Y = create_X_y(df)
+exp_X = exp_X.applymap(int)
+exp_Y = exp_Y.applymap(int)
+regr = RandomForestRegressor(max_depth=3,n_estimators=100,n_jobs = -1)
+y_predicted_rf_all, y_true_rf_all= prediction_all_values(exp_X,exp_Y,regr)
+\end{lstlisting}
+Example of usage of this function
+
+
+\item Applied diagonal feeding and generated predictions using 8 methods: Adaboost; Kernel Regression; Lasso; Neural Network; Poisson Regression; Random Forest Regression; Ridge; SVR (see Appendix ~\ref{appendix:two} for an example of using this methods).
+
+\item Applied diagonal feeding and generated predictions using 3 types of transformation: No transformation; min-max scaling; log transformation.
+\begin{lstlisting}[language =Python, breaklines=True]
+y_predicted, y_true= prediction_all_values(exp_X,exp_Y,ab)
+y_predicted, y_true= prediction_all_values_minmax(exp_X,exp_Y,ab)
+y_predicted, y_true= prediction_all_values_logtransf(exp_X,exp_Y,ab)
+\end{lstlisting}
+Example of generating the predictions using no transformation, min-max scaling, log transformation using Adaboost method
+
+
+\item Applied diagonal feeding and generated predictions using 2 types of fitting the input: Fit and predict item by item; fit all items and predict item by item.
+\begin{lstlisting}[language =Python, breaklines=True]
+ada_tree_backing = DecisionTreeRegressor(max_features='sqrt', splitter='random', min_samples_split=3, max_depth=3)
+ab = AdaBoostRegressor(ada_tree_backing, learning_rate=0.1, loss='square', n_estimators=100)
+y_predicted, y_true= prediction_all_values(exp_X,exp_Y,ab)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,ab)
+\end{lstlisting}
+Example of generating the predictions using "Fit and predict item by item", "Fit all items and predict item by item" using Adaboost method
+
+\item Generated histogram with SMAPE distribution (Appendix ~\ref{appendix:three}) and prediction scatter plot (Appendix ~\ref{appendix:four}) for foregoing 48 models
+
+\item Applied feature importance generation for foregoing 48 models (Figure \ref{fig:one1}).
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{9.jpg}
+\centering
+\caption{Example of generated feature importance for particular model}
+\label{fig:one1}
+\end{figure}
+
+Please see Appendix ~\ref{appendix:five}  for a scatter plot of the generated feature importance for particular model
+
+
+\item Excel file with comparison of performance measure of models for different data sets (Figure \ref{fig:excel_file_comparis}).
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{11.JPG}
+\centering
+\caption{Generated dashboard with mean SMAPE for each method, when future flag = 0 and for the data set from stage 3}
+\label{fig:excel_file_comparis}
+\end{figure}
+
+\end{enumerate}
+\section{Discussion and key findings}
+\begin{enumerate}  
+\item For foregoing models prediction of only future flag = 0 shows appropriate SMAPE ($> 50\%$). 
+
+Figure \ref{fig:for_foregoing_models} shows the comparison of dashboards with different future flag. 
+Figure \ref{fig:for_foregoing models2} shows the distribution of SMAPE for various future flags. 
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{12.JPG}
+\centering
+\caption{We can notice that the resulted SMAPE for all models with future flag = 1 is greater than 50\%.}
+\label{fig:for_foregoing_models}
+\end{figure}
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{17.JPG}
+\centering
+\caption{If we increase future flag, the resulting SMAPE will also increase for all models.}
+\label{fig:for_foregoing models2}
+\end{figure}
+
+\item When we fit all items without the transformation the prediction seems to be heavily shifted to make predictions with larger value.
+
+Figure \ref{fig:when_we_fit_all} gives the example of scatter plot of prediction vs actual, which captures this trend. 
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{13.JPG}
+\centering
+\caption{Example of this occurrence. Same phenomenon can be traced in other methods }
+\label{fig:when_we_fit_all}
+\end{figure}
+Possible explanation is that there are items with large volume which shift the prediction in this direction. We can mitigate this my 
+\item Only Kernel method shows relatively low volatility when estimating SMAPE for different data sets. Other methods show spread around 15\%. Also, using Log transformation decreases the volatility (Figure \ref{fig:only_kernel_method}).
+
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{14.JPG}
+\centering
+\caption{When we compare mean SMAPE from different stages we can notice that only when we use Kernel Regression the delta is relatively small. We can pay heed to log transformation, where difference is smaller}
+\label{fig:only_kernel_method}
+\end{figure}
+
+\item  Usually log transformation shows better SMAPE compared to no transformation or min-max scaling (Figure \ref{fig:usually_log_transform}).
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{15.JPG}
+\centering
+\caption{We can notice that the average taken SMAPE is greater when we use log transformation. In the highlighted cells the log transformation performed better.}
+\label{fig:usually_log_transform}
+\end{figure}
+
+
+\item  Adaboost, Ridge, Neural Network, Lasso, Poisson Regression don’t show appropriate SMAPE ( $>50\%$). An exception is fitting all items with log 
+Transformation, where mean SMAPE is around $45\%$ (Figure \ref{fig:adaboost_ridge_neural}).
+
+\begin{figure}[H]
+\includegraphics[width=14cm]{16.JPG}
+\centering\textbf{\textbf{}}
+\caption{Highlighted cells show, that this particular model performed with SMAPE greater than 50\%. }
+\label{fig:adaboost_ridge_neural}
+\end{figure}
+
+\item  Kernel regression shows consistent good results when using all types of transformation and fitting (Figure \ref{fig:kernel_regression}). 
+\begin{figure}[H]
+\includegraphics[width=14cm]{18.JPG}
+\centering
+\caption{Stage 3. All types of Kernel model show good SMAPE }
+\label{fig:kernel_regression}
+\end{figure}
+
+\item "All items fit" has greater SMAPE by around $5\%$ (Figure \ref{fig:all_items_fit}). 
+\begin{figure}[H]
+\includegraphics[width=14cm]{19.JPG}
+\centering
+\caption{Highlighted cell shows, where SMAPE is lesser("item by item fit" vs "all items fit"). One can see the prevalence of highlighted cells in the section of "item by item fit"}
+\label{fig:all_items_fit}
+\end{figure}
+
+\item  Random Forests Regression shows good results only when using one item fitting or employing log transformation (Figure \ref{fig:random_forests_regrression_shows}).  
+\begin{figure}[H]
+\includegraphics[width=10cm]{20.JPG}
+\caption{Table with results of running Random Forest regression on different data sets}
+\label{fig:random_forests_regrression_shows}
+\centering
+\end{figure}
+
+
+\item  Most methods, which perform well, depend on very similar values (Figure \ref{fig:most_methods_which_perform}). They are:
+\begin{itemize}
+\item quantiles / min / median of actual time series
+\item centroid / skew derived from FFT for actual time series
+\end{itemize}
+\begin{figure}[H]
+\includegraphics[width=14cm]{22.JPG}
+\centering
+\caption{Top 10 features stand out for 84\% of all relative feature importances.}
+\label{fig:most_methods_which_perform}
+\end{figure}
+
+\end{enumerate}
+
+\section{Conclusions}
+The initial goal was to:
+\begin{itemize}
+\item Implement functioning code to use diagonal feeding. This task was completed.
+\item Choose 5 models, apply diagonal feeding and compare results with Ensemble of Gradient Boosting, Random Forest, SVM Regression, ARIMA, ARIMAX, Kernel Regression. We have chosen the following 4 state-of-arts models to compare results to: Adaboost, Lasso, Ridge, Neural Network.
+\end{itemize}
+Also the feature importance for given methods was generated as well as applied different techniques of transformation and types of fitting the data. 
+Given more time I would like to focus on:
+\begin{itemize}
+\item Dedicate more time to deeply investigate, why certain methods perform well and others don't. For this I need to thoroughly understand the method and the appropriate applications of the given method
+\item It would be interesting to see analyze which methods are more appropriate when we now the features of given item. Thus, we can utilize the best performing method and improve the accuracy of prediction
+\end{itemize}
+It would be great that in further analyzes I would be able to cover this topics
+\section{Recommendations}
+We have  determined that Kernel Regression and Random Forest perform better compared to other analyzed methods. Thus, it is recommended to chose them for further analysis. 
+Additionally, when employing Random Forest it is advisable to fit item by item and use log transformation in order to reach the best possible prediction. 
+Neural Network with log transformation and fitting all items at once performs well as well. 
+
+Also in order to improve the accuracy of prediction, we can predict items, which have the resembling same quantiles, min, median, centroid derived from FFT, skew derived from FFT  as those items, which are given in stage 1 and 3.  
+
+
+\begin{appendices}
+
+\section{}
+Example of implemented function, which uses diagonal feeding and predicts given items by fitting all items at the same time and uses api from scikit-learning
+
+
+
+\label{appendix:one}
+\begin{lstlisting}[language =Python, breaklines=True]  
+def prediction_item_by_item_fit(exp_X_trunc,exp_Y_trunc,regrr):
+    y_predicted = defaultdict()
+    exp_Y_trunc = exp_Y_trunc.reindex(columns=['rpd','item',' 1-0',' 2-0',' 3-0',' 4-0',' 2-1',' 3-1',' 3-2',' 4-1',' 4-2',' 4-3'])
+    y_true = defaultdict()
+    for it in set(exp_X_trunc.item):
+        y_predicted[it] = [[],[],[],[],[],[],[],[],[],[]]
+        y_true[it] = [[],[],[],[],[],[],[],[],[],[]]
+    for i in range(33,45):             
+        for ii in range(1,11):
+            for it in set(exp_X_trunc.item):
+                regr = regrr
+                X = exp_X_trunc.loc[exp_X_trunc['rpd'].isin(list(range(1,i+1)))]
+                X = X.loc[X['item']==it].iloc[:,2:12]
+                Y = exp_Y_trunc.loc[exp_Y_trunc['rpd'].isin(list(range(1,i+1)))]
+                Y = Y.loc[Y['item']==it].iloc[:,ii+1]
+                regr.fit(X,Y)          
+                X_test = exp_X_trunc.loc[exp_X_trunc['rpd'].isin(list(range(i+1,i+2)))]
+                X_test = X_test.loc[X_test['item']==it].iloc[:,2:12]
+                if (X_test.size==0):
+                    continue
+                y_predicted[it][ii-1].append(regr.predict(X_test)[0])
+                true_ = exp_Y_trunc.loc[exp_Y_trunc['rpd'].isin(list(range(i+1,i+2)))]
+                true_ = true_.loc[true_['item']==it].iloc[:,ii+1].values[0]
+                y_true[it][ii-1].append(true_)
+    for x in y_predicted.keys():
+        y_predicted[x] = pd.DataFrame(np.array(y_predicted[x]).clip(min=0).transpose())
+        y_true[x] = pd.DataFrame(np.array(y_true[x]).transpose()).applymap(float)
+    return y_predicted,y_true
+\end{lstlisting}
+\section{}
+Example of generating the predictions for these 8 models
+\label{appendix:two}
+\begin{lstlisting}[language =Python, breaklines=True]  
+ada_tree_backing = DecisionTreeRegressor(max_features='sqrt', splitter='random', min_samples_split=3, max_depth=3)
+ab = AdaBoostRegressor(ada_tree_backing, learning_rate=0.1, loss='square', n_estimators=100)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,ab)
+kr = KernelRidge(alpha=1.0)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,kr)
+ls = Lasso(alpha=0.1)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,ls)
+rg =Ridge(alpha=1.0)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,rg)
+svrr = SVR(C=1.0, epsilon=0.2)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,svrr)
+nn = MLPRegressor(activation= 'tanh', hidden_layer_sizes= (20,), solver= 'lbfgs')
+y_predicted, y_true= prediction_all_values(exp_X,exp_Y,nn)
+pr = xgboost.XGBRegressor( params={"objective": "count:poisson"},num_boost_round=100000,
+            early_stopping_rounds=5,verbose_eval=False,n_jobs = -1)
+y_predicted, y_true= prediction_all_values_logtransf(exp_X,exp_Y,pr)
+regr = RandomForestRegressor(max_depth=3,n_estimators=100,n_jobs = -1)
+y_predicted, y_true= prediction_item_by_item_fit(exp_X,exp_Y,regr)
+
+\end{lstlisting}
+
+\section{}
+\begin{figure}[H]
+\includegraphics[width=8cm]{7.jpg}
+\centering
+\caption{Example of generated histogram with SMAPE distribution. Here we can see, that the chosen method performs quite well with mean SMAPE = 38\%}
+\label{appendix:three}
+\end{figure}
+
+
+\section{}
+\begin{figure}[H]
+\includegraphics[width=8cm]{8.jpg}
+\centering
+\caption{Example of generated scatter plot}
+\label{appendix:four}
+\end{figure}
+
+\section{}
+\begin{figure}[H]
+\includegraphics[width=10cm]{10.jpg}
+\centering
+\caption{Example of generated feature importance for particular model}
+\label{appendix:five}
+\end{figure}
+
+\end{appendices}
+\end{document}
